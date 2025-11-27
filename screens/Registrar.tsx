@@ -1,8 +1,9 @@
 import { StatusBar } from 'expo-status-bar';
 import { StyleSheet, Text, View, TextInput, TouchableOpacity, ScrollView, Modal } from 'react-native';
-import { useState } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { Calendar } from 'react-native-calendars';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
+import { Camera, CameraView } from 'expo-camera'; 
 
 export default function Registrar() {
   const [InputUno, setInputUno] = useState('');
@@ -16,11 +17,39 @@ export default function Registrar() {
   const [fechaCaducidad, setFechaCaducidad] = useState<string | null>(null);
   const [showCalendarCompra, setShowCalendarCompra] = useState(false);
   const [showCalendarCaducidad, setShowCalendarCaducidad] = useState(false);
+
+  // barcode
   const [codigoBarras, setCodigoBarras] = useState('');
   const [cantidadStock, setCantidadStock] = useState('');
+  const [scannerVisible, setScannerVisible] = useState(false);
+  const [hasCameraPermission, setHasCameraPermission] = useState<boolean | null>(null);
+  const [scannedData, setScannedData] = useState<{ type: string; data: string } | null>(null);
+  const [scannedOnce, setScannedOnce] = useState(false);
+  const [flash, setFlash] = useState(false);
+  const cameraRef = useRef<CameraView | null>(null); 
 
-  const handleScanBarcode = () => {
-    console.log('Abriendo escáner de código de barras');
+  useEffect(() => {
+    (async () => {
+      const { status } = await Camera.requestCameraPermissionsAsync();
+      setHasCameraPermission(status === 'granted');
+    })();
+  }, []);
+
+  const openScanner = () => {
+    setScannedData(null);
+    setScannedOnce(false);
+    setScannerVisible(true);
+  };
+
+  const onBarCodeScanned = ({ type, data }: { type: string; data: string }) => {
+    if (scannedOnce) return;
+    setScannedOnce(true);
+    setScannedData({ type, data });
+  };
+
+  const acceptScanned = () => {
+    if (scannedData) setCodigoBarras(scannedData.data);
+    setScannerVisible(false);
   };
 
   const handleGuardarProducto = () => {
@@ -130,11 +159,17 @@ export default function Registrar() {
         <Text style={[styles.subtitulos, { marginTop: 12 }]}>Código de Barras</Text>
         <View style={styles.barcodeContainer}>
           <View style={styles.barcodeInputWrapper}>
-            <Text style={styles.inputs}> código de barras</Text>
+            <TextInput
+              style={styles.inputs}
+              value={codigoBarras}
+              onChangeText={setCodigoBarras}
+              placeholder="0"
+            />
           </View>
           <TouchableOpacity 
             style={styles.scanButton}
-            onPress={handleScanBarcode}
+            onPress={openScanner}
+            accessibilityLabel="Abrir escáner"
           >
             <MaterialCommunityIcons name="barcode-scan" color="#fff" size={32} />
             <Text style={styles.scanButtonText}>Escanear</Text>
@@ -149,7 +184,51 @@ export default function Registrar() {
         </TouchableOpacity>
       </View>
 
-      
+    
+      <Modal visible={scannerVisible} animationType="slide" transparent={false} onRequestClose={() => setScannerVisible(false)}>
+        <View style={styles.scannerContainer}>
+          {hasCameraPermission === false ? (
+            <View style={styles.label}><Text>Sin permiso de cámara</Text></View>
+          ) : (
+            <CameraView 
+              ref={cameraRef}
+              style={styles.scannerCamera}
+              onBarcodeScanned={onBarCodeScanned}
+              flash={flash ? "on" : "off"} 
+              facing="back"
+            />
+          )}
+
+          <View style={styles.scannerFooter}>
+            <TouchableOpacity style={styles.scannerBtn} onPress={() => setFlash((s) => !s)}>
+              <MaterialCommunityIcons name={flash ? 'flash' : 'flash-off'} size={22} color="#fff" />
+              <Text style={styles.scannerBtnText}>{flash ? 'Flash ON' : 'Flash OFF'}</Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity style={styles.scannerBtn} onPress={() => setScannerVisible(false)}>
+              <MaterialCommunityIcons name="close" size={22} color="#fff" />
+              <Text style={styles.scannerBtnText}>Cerrar</Text>
+            </TouchableOpacity>
+          </View>
+
+          {scannedData && (
+            <View style={styles.scannedCard}>
+              <Text style={styles.scannedTitle}>Scanned Barcode:</Text>
+              <Text style={styles.scannedText}>Data: {scannedData.data}</Text>
+              <Text style={styles.scannedText}>Format: {scannedData.type}</Text>
+              <View style={styles.scannedActions}>
+                <TouchableOpacity style={styles.scannedActionBtn} onPress={() => { setScannedOnce(false); setScannedData(null); }}>
+                  <Text style={styles.scannedActionText}>Scan Again</Text>
+                </TouchableOpacity>
+                <TouchableOpacity style={[styles.scannedActionBtn, styles.scannedAccept]} onPress={acceptScanned}>
+                  <Text style={[styles.scannedActionText, { color: '#fff' }]}>Usar</Text>
+                </TouchableOpacity>
+              </View>
+            </View>
+          )}
+        </View>
+      </Modal>
+
       <Modal
         visible={showCalendarCompra}
         transparent={true}
@@ -228,6 +307,8 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: '#f5f5f5',
   },
+
+  
 
   box: {
     width: "100%",
@@ -406,4 +487,18 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: '600',
   },
+
+  // Scanner styles
+  scannerContainer: { flex: 1, backgroundColor: '#000' },
+  scannerCamera: { flex: 1 },
+  scannerFooter: { position: 'absolute', bottom: 24, left: 16, right: 16, flexDirection: 'row', justifyContent: 'space-between' },
+  scannerBtn: { backgroundColor: 'rgba(0,0,0,0.5)', padding: 10, borderRadius: 8, alignItems: 'center' },
+  scannerBtnText: { color: '#fff', marginTop: 4, fontSize: 12 },
+  scannedCard: { position: 'absolute', top: 60, left: 24, right: 24, backgroundColor: '#fff', padding: 12, borderRadius: 10, elevation: 8 },
+  scannedTitle: { fontWeight: '700', fontSize: 16, marginBottom: 8 },
+  scannedText: { fontSize: 14, marginBottom: 4 },
+  scannedActions: { flexDirection: 'row', justifyContent: 'flex-end', gap: 8 },
+  scannedActionBtn: { paddingHorizontal: 12, paddingVertical: 8, borderRadius: 8, backgroundColor: '#e5e7eb', marginLeft: 8 },
+  scannedAccept: { backgroundColor: '#0B3D91' },
+  scannedActionText: { fontWeight: '600' },
 });
