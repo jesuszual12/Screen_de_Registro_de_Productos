@@ -488,7 +488,7 @@ const styles = StyleSheet.create({
     fontWeight: '600',
   },
 
-  // Scanner styles
+ 
   scannerContainer: { flex: 1, backgroundColor: '#000' },
   scannerCamera: { flex: 1 },
   scannerFooter: { position: 'absolute', bottom: 24, left: 16, right: 16, flexDirection: 'row', justifyContent: 'space-between' },
